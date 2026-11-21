@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ふるさと納税 寄附メモ v1.0</title>
+<style>
+:root{--bg:#f6f4ef;--card:#fff;--line:#d7ccc8;--ink:#3e2723;--sub:#6d4c41;--red:#c62828;--orange:#e65100;--blue:#1565c0;--green:#2e7d32;--gray:#555}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:#222;font-family:"Meiryo UI","Hiragino Sans","Noto Sans CJK JP","Noto Sans JP",sans-serif;font-size:14px}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px 4px}
+h1{font-size:20px;margin:0;color:var(--ink);flex:1 1 auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tag{font-size:11px;background:#ffe082;color:#5d4037;padding:2px 6px;border-radius:3px;font-weight:bold}
+.bar{display:flex;flex-wrap:wrap;gap:4px}
+button,.btn{font:inherit;font-size:13px;padding:6px 10px;border:1px solid #bcaaa4;background:#fff;border-radius:4px;cursor:pointer;color:#333}
+button:hover{background:#efebe9}
+#banner{margin:4px 12px 8px;padding:10px 14px;color:#fff;font-size:18px;font-weight:bold;border-radius:4px;line-height:1.4}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:4px;padding:8px 10px;min-width:0}
+.card .t1{color:var(--sub);font-size:12px}
+.card .t2{font-size:24px;font-weight:bold;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .t3{color:#555;font-size:12px}
+.mid{display:grid;grid-template-columns:3fr 2fr;gap:8px;padding:8px 12px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:4px;padding:8px 10px;min-width:0}
+#chart{width:100%;height:220px;display:block}
+#checks div{margin:2px 0;line-height:1.4}
+#deadlines{color:#555;font-size:12px;margin-top:6px}
+.tblhead{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:0 12px}
+.tblhead h2{font-size:15px;margin:0;flex:1 1 auto}
+.tblwrap{margin:4px 12px 8px;background:#fff;border:1px solid var(--line);border-radius:4px;overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th,td{padding:6px 8px;border-bottom:1px solid #eee;text-align:left;white-space:nowrap}
+th{background:#efebe9;font-size:13px}
+td.num{text-align:right}
+tr.sel td{background:#fff3e0}
+tr.unsent td{color:var(--red)}
+tr.done td{color:var(--green)}
+tbody tr{cursor:pointer}
+footer{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;background:#efebe9;padding:4px 12px;font-size:12px;color:#555}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;padding:12px;z-index:10}
+.modal.open{display:flex}
+.dlg{background:var(--bg);border-radius:6px;padding:14px;width:min(520px,100%);max-height:92vh;overflow:auto}
+.dlg h3{margin:0 0 8px}
+.dlg label{display:block;font-size:13px;margin-top:6px}
+.dlg input,.dlg select,.dlg textarea{font:inherit;width:100%;padding:5px;border:1px solid #bcaaa4;border-radius:3px;background:#fff}
+.dlg textarea{height:220px}
+.dlg .err{color:var(--red);font-size:12px;min-height:16px;margin-top:6px}
+.dlg .row{display:flex;gap:6px;justify-content:center;margin-top:10px}
+.note{font-size:12px;color:#666}
+@media (max-width:720px){
+  h1{font-size:17px}
+  #banner{font-size:15px}
+  .cards{grid-template-columns:1fr 1fr}
+  .card .t2{font-size:19px}
+  .mid{grid-template-columns:1fr}
+  #chart{height:200px}
+  .tblwrap{overflow:visible;background:none;border:none}
+  table,thead,tbody,tr,td{display:block;width:100%}
+  thead{display:none}
+  tbody tr{background:#fff;border:1px solid var(--line);border-radius:4px;margin-bottom:6px;padding:4px 8px}
+  td{border:none;padding:2px 0;white-space:normal;text-align:left!important}
+  td::before{content:attr(data-h)"：";color:#888;font-size:12px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>ふるさと納税 寄附メモ v1.0 <span class="tag" id="sampleTag">サンプル(架空)</span></h1>
+  <div class="bar">
+    <button id="bAdd">寄附を追加</button>
+    <button id="bMail">メールから追加</button>
+    <button id="bLoad">読込</button>
+    <select id="selExport" class="btn" aria-label="書出">
+      <option value="">書出…</option>
+      <option value="csv">CSV(Excel向け)</option>
+      <option value="json">JSON(バックアップ)</option>
+      <option value="ics">カレンダー(.ics)</option>
+      <option value="txt">レポート(.txt)</option>
+    </select>
+    <button id="bSettings">設定</button>
+    <button id="bReset">サンプルに戻す</button>
+    <input type="file" id="file" accept=".csv,.json,text/csv,application/json" style="display:none">
+  </div>
+</header>
+<div id="banner"></div>
+<div class="cards" id="cards"></div>
+<div class="mid">
+  <div class="panel"><canvas id="chart"></canvas></div>
+  <div class="panel"><b>チェック</b><div id="checks"></div><div id="deadlines"></div></div>
+</div>
+<div class="tblhead">
+  <h2 id="tblTitle"></h2>
+  <button id="bSent">申請書を送った</button>
+  <button id="bCert">証明書が届いた</button>
+  <button id="bArr">返礼品が届いた</button>
+  <button id="bEdit">編集</button>
+  <button id="bDel">削除</button>
+</div>
+<div class="tblwrap"><table>
+  <thead><tr><th>日付</th><th>自治体</th><th>返礼品</th><th>金額</th><th>申請書</th><th>受領証明書</th><th>返礼品</th><th>期限・状態</th></tr></thead>
+  <tbody id="tbody"></tbody>
+</table></div>
+<footer><span id="status"></span><span>v1.0 ※上限は自分で調べた目安。税務の助言ではありません</span></footer>
+
+<div class="modal" id="mRec"><div class="dlg">
+  <h3 id="recTitle">寄附を追加</h3>
+  <label>日付(例 2026-11-19)<input id="fDate"></label>
+  <label>都道府県<input id="fPref" list="prefList"></label>
+  <label>自治体(市町村)<input id="fCity"></label>
+  <label>返礼品<input id="fItem"></label>
+  <label>金額(円)<input id="fAmount" inputmode="numeric"></label>
+  <label>ワンストップ申請書<select id="fApp"></select></label>
+  <label>受領証明書<select id="fCert"></select></label>
+  <label>返礼品<select id="fArr"></select></label>
+  <label>メモ<input id="fMemo"></label>
+  <div class="err" id="recErr"></div>
+  <div class="row"><button id="recOk">OK</button><button id="recCancel">キャンセル</button></div>
+</div></div>
+<datalist id="prefList"></datalist>
+
+<div class="modal" id="mMail"><div class="dlg">
+  <h3>寄附完了メールから追加</h3>
+  <div class="note">寄附完了メールの本文を貼り付けて「読み取る」を押してください(下は例)</div>
+  <textarea id="mailText"></textarea>
+  <div class="row"><button id="mailGo">読み取る</button><button id="mailCancel">キャンセル</button></div>
+</div></div>
+
+<div class="modal" id="mSet"><div class="dlg">
+  <h3>設定</h3>
+  <label>対象年(0 = 自動。1/10までは前の年)<input id="sYear" inputmode="numeric"></label>
+  <label>基準日(空 = 今日)<input id="sBase"></label>
+  <label>上限の目安(円、0 = 未設定)<input id="sLimit" inputmode="numeric"></label>
+  <label>投函目安: 必着日の何日前<input id="sMargin" inputmode="numeric"></label>
+  <div class="note">上限の目安は、ポータルサイトのシミュレーター等で自分で調べた金額を入れてください。</div>
+  <div class="err" id="setErr"></div>
+  <div class="row"><button id="setOk">OK</button><button id="setCancel">キャンセル</button></div>
+</div></div>
+
+<script>
+"use strict";
+const APP_NAME="ふるさと納税 寄附メモ", APP_VERSION="1.0", APP_TITLE=APP_NAME+" v"+APP_VERSION;
+const JSON_FORMAT="furusato_memo/1", LS_KEY="furusato_memo_v1";
+const APP_STATUSES=["未送付","送付済み","受理済み","確定申告"], CERT_VALUES=["あり","なし"], ARRIVE_VALUES=["到着済み","未着"];
+const CSV_HEADER=["日付","都道府県","自治体","返礼品","金額","申請","受領証明書","返礼品到着","メモ","ID"];
+const ONESTOP_MAX=5;
+const PREFS=["北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県","茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県","新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県","静岡県","愛知県","三重県","滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県","鳥取県","島根県","岡山県","広島県","山口県","徳島県","香川県","愛媛県","高知県","福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"];
+const HEADER_ALIASES={date:["日付","寄附日","寄付日","申込日","決済日","date"],pref:["都道府県","県","pref"],city:["自治体","市区町村","自治体名","寄附先","寄付先","city"],item:["返礼品","お礼の品","お礼品","品名","item"],amount:["金額","寄附金額","寄付金額","寄附額","寄付額","amount"],app:["申請","申請書","ワンストップ","ワンストップ申請","app"],cert:["受領証明書","証明書","cert"],arrived:["返礼品到着","到着","arrived"],memo:["メモ","備考","memo"],id:["ID","id","Id"]};
+const SAMPLE_SETTINGS={year:0,base_date:"",limit:110000,margin:10,per_month:0};
+const SAMPLE_RECORDS=[
+ {id:"F001",date:"2025-12-20",pref:"長野県",city:"松本市",item:"りんご 5kg",amount:10000,app:"受理済み",cert:"あり",arrived:"到着済み",memo:"去年の分"},
+ {id:"F002",date:"2026-02-14",pref:"北海道",city:"紋別市",item:"ホタテ 1kg",amount:12000,app:"受理済み",cert:"あり",arrived:"到着済み",memo:""},
+ {id:"F003",date:"2026-05-03",pref:"山形県",city:"寒河江市",item:"さくらんぼ 500g",amount:15000,app:"受理済み",cert:"あり",arrived:"到着済み",memo:""},
+ {id:"F004",date:"2026-07-20",pref:"宮崎県",city:"都城市",item:"豚肉 切り落とし 3kg",amount:10000,app:"送付済み",cert:"あり",arrived:"到着済み",memo:""},
+ {id:"F005",date:"2026-09-10",pref:"北海道",city:"紋別市",item:"ズワイガニ 1kg",amount:20000,app:"送付済み",cert:"あり",arrived:"到着済み",memo:"同じ自治体2回目"},
+ {id:"F006",date:"2026-10-05",pref:"佐賀県",city:"唐津市",item:"イカの一夜干し",amount:13000,app:"未送付",cert:"あり",arrived:"未着",memo:""},
+ {id:"F007",date:"2026-11-08",pref:"静岡県",city:"焼津市",item:"マグロ 柵 1kg",amount:11000,app:"未送付",cert:"なし",arrived:"未着",memo:""},
+ {id:"F008",date:"2026-11-16",pref:"山形県",city:"寒河江市",item:"つや姫 10kg",amount:17000,app:"未送付",cert:"なし",arrived:"未着",memo:"年末までに申請書を出す"}];
+const SAMPLE_MAIL="件名: 【ふるさと納税】寄附のお申し込みありがとうございます\nこのたびは寄附のお申し込みをいただき、誠にありがとうございます。\n\n■寄附先: 北海道紋別市\n■寄附日: 2026年11月18日\n■お礼の品: 紋別産 ほたて貝柱 500g\n■寄附金額: 9,000円\n\nワンストップ特例申請書は 2027年1月10日(必着)までにご提出ください。\n";
+
+// ---------- 日付(整数の日数で扱う)
+function mkDate(y,m,d){const t=Date.UTC(y,m-1,d);const dt=new Date(t);if(dt.getUTCFullYear()!==y||dt.getUTCMonth()!==m-1||dt.getUTCDate()!==d||y<1)return null;return {y,m,d,n:Math.round(t/86400000)};}
+function fromN(n){const dt=new Date(n*86400000);return mkDate(dt.getUTCFullYear(),dt.getUTCMonth()+1,dt.getUTCDate());}
+function addDays(d,k){return fromN(d.n+k);}
+const p2=v=>String(v).padStart(2,"0");
+function ymd(d){return String(d.y).padStart(4,"0")+"-"+p2(d.m)+"-"+p2(d.d);}
+function md(d){return d.m+"/"+d.d;}
+function realToday(){const t=new Date();return mkDate(t.getFullYear(),t.getMonth()+1,t.getDate());}
+function nfkc(s){return String(s==null?"":s).normalize("NFKC").trim();}
+function yen(n){n=Math.trunc(n);const a=String(Math.abs(n)).replace(/\B(?=(\d{3})+(?!\d))/g,",");return (n<0?"-¥":"¥")+a;}
+function parseDate(s,defaultYear){
+  const t=nfkc(s);if(!t)return null;
+  let m=t.match(/(\d{4})\s*[-/年.]\s*(\d{1,2})\s*[-/月.]\s*(\d{1,2})/),y,mo,d;
+  if(!m){const m2=t.match(/(?<!\d)(\d{4})(\d{2})(\d{2})(?!\d)/);if(m2)m=m2;}
+  if(m){y=+m[1];mo=+m[2];d=+m[3];}
+  else{m=t.match(/(?<!\d)(\d{1,2})\s*[/月]\s*(\d{1,2})(?!\d)/);if(!m||defaultYear==null)return null;y=+defaultYear;mo=+m[1];d=+m[2];}
+  return mkDate(y,mo,d);
+}
+function parseAmount(s){const t=nfkc(s).replace(/,/g,"").replace(/¥/g,"").replace(/\\/g,"").replace(/円/g,"").trim();const m=t.match(/-?\d+/);return m?parseInt(m[0],10):null;}
+function normApp(s){const t=nfkc(s);if(!t)return "未送付";if(t.includes("確定")||t.includes("申告"))return "確定申告";if(t.includes("受理")||t.includes("完了"))return "受理済み";if(t.includes("未"))return "未送付";if(t.includes("送")||t.includes("済")||t.includes("投函"))return "送付済み";return "未送付";}
+function normCert(s){const t=nfkc(s);return ["あり","有","有り","済","済み","届いた","到着","○","yes","Yes","1","true"].includes(t)?"あり":"なし";}
+function normArrived(s){const t=nfkc(s);return (t&&(t.includes("済")||["到着","届いた","○","yes","Yes","1","true","あり"].includes(t)))?"到着済み":"未着";}
+function muniKey(r){return nfkc(r.pref)+nfkc(r.city);}
+function muniLabel(r){return ((r.pref||"")+" "+(r.city||"")).trim();}
+function targetYear(st,today){const y=parseInt(st.year||0,10);if(y>0)return y;if(today.m===1&&today.d<=10)return today.y-1;return today.y;}
+function baseToday(st){const d=st.base_date?parseDate(st.base_date):null;return d||realToday();}
+function cmpRec(a,b){const ka=a.date+"\u0000"+a.id,kb=b.date+"\u0000"+b.id;return ka<kb?-1:ka>kb?1:0;}
+function sortRecs(rs){return rs.slice().sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:(a.id<b.id?-1:a.id>b.id?1:0));}
+
+function summarize(records,st,today){
+  const year=targetYear(st,today);
+  const recs=sortRecs(records.filter(r=>String(r.date).slice(0,4)===String(year)));
+  const others=records.length-recs.length;
+  const total=recs.reduce((a,r)=>a+parseInt(r.amount,10),0);
+  const munis=[];for(const r of recs){const k=muniKey(r);if(!munis.some(m=>m[0]===k))munis.push([k,muniLabel(r)]);}
+  const nM=munis.length, limit=parseInt(st.limit||0,10), margin=(st.margin!=null&&st.margin!=="")?parseInt(st.margin,10):10;
+  const deadline=mkDate(year+1,1,10), postBy=addDays(deadline,-margin), donateEnd=mkDate(year,12,31);
+  const unsent=recs.filter(r=>r.app==="未送付"),sent=recs.filter(r=>r.app==="送付済み"),accepted=recs.filter(r=>r.app==="受理済み"),kakutei=recs.filter(r=>r.app==="確定申告");
+  const mode=kakutei.length?"確定申告":(nM>ONESTOP_MAX?"確定申告が必要":"ワンストップ");
+  const certMissing=recs.filter(r=>r.cert!=="あり"),notArrived=recs.filter(r=>r.arrived!=="到着済み");
+  const monthly=new Array(12).fill(0);for(const r of recs)monthly[parseInt(r.date.slice(5,7),10)-1]+=parseInt(r.amount,10);
+  const cumulative=[];let acc=0;for(const v of monthly){acc+=v;cumulative.push(acc);}
+  const dD=deadline.n-today.n,dP=postBy.n-today.n,dE=donateEnd.n-today.n;
+  const remain=limit>0?limit-total:null,pct=limit>0?Math.floor(total*100/limit):null;
+  const msgs=[];
+  if(mode==="確定申告が必要")msgs.push(["red",`寄附先が${nM}団体(6団体以上)なので、ワンストップ特例は使えません → 確定申告が必要です`]);
+  else if(mode==="確定申告"&&kakutei.length<recs.length)msgs.push(["red",`確定申告をするとワンストップ申請は無効になります → ${year}年の寄附${recs.length}件をすべて申告に入れてください`]);
+  else if(mode==="ワンストップ"&&unsent.length){
+    if(dD<0)msgs.push(["red",`申請書の期限(${md(deadline)}必着)を過ぎました → 未送付${unsent.length}件は確定申告で控除を受けられます`]);
+    else msgs.push(["red",`ワンストップ申請書 未送付 ${unsent.length}件 → ${md(deadline)}必着まで あと${dD}日(投函目安 ${md(postBy)})`]);
+  }
+  if(remain!==null){
+    if(remain<0)msgs.push(["orange",`上限の目安を ${yen(-remain)} 超えています(超えた分は自己負担がふえます)`]);
+    else if(remain>0&&dE>=0)msgs.push(["blue",`上限の目安まで あと ${yen(remain)}(${year}年の寄附は12/31まで あと${dE}日)`]);
+  }
+  if(mode==="ワンストップ"&&nM===ONESTOP_MAX)msgs.push(["orange",`寄附先 ${nM}/${ONESTOP_MAX}団体: あと1団体ふえるとワンストップ不可(同じ自治体なら何回でもOK)`]);
+  if(mode!=="ワンストップ"&&certMissing.length)msgs.push(["orange",`受領証明書がまだ無い寄附 ${certMissing.length}件(確定申告に必要)`]);
+  if(mode==="ワンストップ"&&sent.length)msgs.push(["gray",`申請書 送付済み・受理の連絡待ち ${sent.length}件`]);
+  if(notArrived.length)msgs.push(["gray",`返礼品 まだ届いていない ${notArrived.length}件`]);
+  if(!recs.length)msgs.unshift(["gray",`${year}年の寄附はまだありません`]);
+  if(recs.length&&!msgs.some(m=>m[0]==="red"||m[0]==="orange"))msgs.unshift(["green","急ぐことはありません。すべてOKです"]);
+  return {year,today,records:recs,others,count:recs.length,total,munis,n_munis:nM,limit,remain,pct,deadline,post_by:postBy,donate_end:donateEnd,
+    days_deadline:dD,days_post:dP,days_end:dE,unsent,sent,accepted,kakutei,mode,cert_missing:certMissing,not_arrived:notArrived,monthly,cumulative,messages:msgs,top:msgs.length?msgs[0][1]:""};
+}
+function rowStatus(r,s){
+  const a=r.app;
+  if(a==="確定申告")return "確定申告で控除"+(r.cert!=="あり"?"・証明書待ち":"");
+  if(s.mode!=="ワンストップ")return "確定申告へ"+(r.cert!=="あり"?"・証明書待ち":"");
+  if(a==="未送付")return s.days_deadline<0?"期限切れ→確定申告":`申請書 あと${s.days_deadline}日`;
+  if(a==="送付済み")return "受理の連絡待ち";
+  return "完了";
+}
+function cardTexts(s){
+  const c1=[`${s.year}年の寄附`,`${s.count}件 ${yen(s.total)}`,`自治体 ${s.n_munis}団体`+(s.others?`・ほかの年 ${s.others}件`:"")];
+  let c2,c3;
+  if(s.limit>0)c2=s.remain>=0?["上限の目安まで",`あと ${yen(s.remain)}`,`目安 ${yen(s.limit)} の ${s.pct}%`]:["上限の目安を",`${yen(-s.remain)} 超え`,`目安 ${yen(s.limit)} の ${s.pct}%`];
+  else c2=["上限の目安","未設定","設定で目安を入れてください"];
+  if(s.mode==="ワンストップ"){
+    if(s.unsent.length)c3=s.days_deadline>=0?["ワンストップ申請書",`未送付 ${s.unsent.length}件`,`${md(s.deadline)}必着まで あと${s.days_deadline}日`]:["ワンストップ申請書",`未送付 ${s.unsent.length}件`,"期限切れ → 確定申告へ"];
+    else c3=["ワンストップ申請書","未送付 0件",`送付済み ${s.sent.length}件・受理済み ${s.accepted.length}件`];
+  }else c3=["控除の受け方","確定申告",`受領証明書 待ち ${s.cert_missing.length}件`];
+  const c4=["寄附先(ワンストップは5団体まで)",`${s.n_munis}/${ONESTOP_MAX}団体`,s.n_munis===ONESTOP_MAX?"あと1団体で上限":(s.n_munis>ONESTOP_MAX?"6団体以上 → 確定申告":`あと${ONESTOP_MAX-s.n_munis}団体OK`)];
+  return [c1,c2,c3,c4];
+}
+
+// ---------- 入出力
+function csvEscape(v){v=String(v);return /[,"\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
+function exportCsv(records){
+  const lines=[CSV_HEADER.join(",")];
+  for(const r of sortRecs(records))lines.push([r.date,r.pref,r.city,r.item,String(parseInt(r.amount,10)),r.app,r.cert,r.arrived,r.memo||"",r.id].map(csvEscape).join(","));
+  return "\ufeff"+lines.join("\r\n")+"\r\n";
+}
+function parseCsv(text){
+  const rows=[];let row=[],f="",q=false,i=0;
+  while(i<text.length){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){f+='"';i+=2;continue;}q=false;i++;continue;}f+=c;i++;continue;}
+    if(c==='"'&&f===""){q=true;i++;continue;}
+    if(c===","){row.push(f);f="";i++;continue;}
+    if(c==="\r"||c==="\n"){row.push(f);rows.push(row);row=[];f="";if(c==="\r"&&text[i+1]==="\n")i++;i++;continue;}
+    f+=c;i++;}
+  if(f!==""||row.length){row.push(f);rows.push(row);}
+  return rows;
+}
+function decodeBytes(buf){
+  const b=new Uint8Array(buf);
+  if(b[0]===0xEF&&b[1]===0xBB&&b[2]===0xBF)return [new TextDecoder("utf-8").decode(b.subarray(3)),"UTF-8(BOM)"];
+  try{return [new TextDecoder("utf-8",{fatal:true}).decode(b),"UTF-8"];}catch(e){return [new TextDecoder("shift_jis").decode(b),"Shift_JIS"];}
+}
+function nextId(records){let n=0;for(const r of records){const m=String(r.id||"").match(/^F(\d+)$/);if(m)n=Math.max(n,parseInt(m[1],10));}return "F"+String(n+1).padStart(3,"0");}
+function sameRecord(a,b){return a.date===b.date&&muniKey(a)===muniKey(b)&&parseInt(a.amount,10)===parseInt(b.amount,10)&&nfkc(a.item)===nfkc(b.item);}
+function splitPrefCity(text){const t=nfkc(text).replace(/ /g,"");for(const p of PREFS)if(t.startsWith(p))return [p,t.slice(p.length)];return ["",t];}
+function importCsv(text,existing,defaultYear){
+  const warnings=[];
+  let rows=parseCsv(text.replace(/^\ufeff/,"")).filter(r=>r.some(c=>c.trim()));
+  if(!rows.length)return [[],["空のファイルです"]];
+  const head=rows[0].map(nfkc),col={};
+  for(const [key,names] of Object.entries(HEADER_ALIASES))head.forEach((h,i)=>{if(names.includes(h)&&!(key in col))col[key]=i;});
+  if(!("date" in col)||!("amount" in col)||!("city" in col))return [[],["見出しに 日付・自治体・金額 が必要です(例: "+CSV_HEADER.join(",")+")"]];
+  const added=[],pool=existing.slice();
+  rows.slice(1).forEach((row,idx)=>{
+    const ln=idx+2,g=k=>{const i=col[k];return i!==undefined&&i<row.length?row[i]:"";};
+    const d=parseDate(g("date"),defaultYear),a=parseAmount(g("amount"));let city=nfkc(g("city")),pref=nfkc(g("pref"));
+    if(!pref){[pref,city]=splitPrefCity(city);}
+    if(d===null){warnings.push(`${ln}行目: 日付が読めないので飛ばしました`);return;}
+    if(a===null||a<=0){warnings.push(`${ln}行目: 金額が読めないので飛ばしました`);return;}
+    if(!city){warnings.push(`${ln}行目: 自治体が空なので飛ばしました`);return;}
+    const rec={id:nfkc(g("id")),date:ymd(d),pref,city,item:nfkc(g("item")),amount:a,app:normApp(g("app")),cert:normCert(g("cert")),arrived:normArrived(g("arrived")),memo:nfkc(g("memo"))};
+    if(pool.some(x=>sameRecord(rec,x))){warnings.push(`${ln}行目: 同じ寄附がすでにあるので飛ばしました`);return;}
+    if(!rec.id||pool.some(x=>x.id===rec.id))rec.id=nextId(pool);
+    pool.push(rec);added.push(rec);
+  });
+  return [added,warnings];
+}
+function exportJson(records,st){
+  const obj={format:JSON_FORMAT,app:APP_NAME,version:APP_VERSION,
+    settings:{year:parseInt(st.year||0,10),base_date:st.base_date||"",limit:parseInt(st.limit||0,10),margin:parseInt(st.margin||0,10)},
+    records:sortRecs(records).map(r=>({id:r.id,date:r.date,pref:r.pref,city:r.city,item:r.item,amount:parseInt(r.amount,10),app:r.app,cert:r.cert,arrived:r.arrived,memo:r.memo}))};
+  return JSON.stringify(obj,null,2)+"\n";
+}
+function importJson(text){
+  const obj=JSON.parse(text.replace(/^\ufeff/,""));
+  if(!obj||typeof obj!=="object"||Array.isArray(obj)||obj.format!==JSON_FORMAT)throw new Error(`このJSONは ${JSON_FORMAT} 形式ではありません`);
+  const recs=[];
+  for(const r of obj.records||[]){const d=parseDate(r.date||""),a=parseAmount(r.amount==null?"":r.amount);if(d===null||a===null)continue;
+    recs.push({id:String(r.id||""),date:ymd(d),pref:nfkc(r.pref),city:nfkc(r.city),item:nfkc(r.item),amount:a,app:normApp(r.app),cert:normCert(r.cert),arrived:normArrived(r.arrived),memo:String(r.memo==null?"":r.memo)});}
+  for(const r of recs)if(!r.id)r.id=nextId(recs);
+  const s=obj.settings||{};
+  return [recs,{year:parseInt(s.year||0,10),base_date:String(s.base_date||""),limit:parseInt(s.limit||0,10),margin:(s.margin!=null)?parseInt(s.margin,10):10}];
+}
+function icsEscape(s){return String(s).replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n");}
+function d8(d){return String(d.y).padStart(4,"0")+p2(d.m)+p2(d.d);}
+function exportIcs(s){
+  const stamp=d8(s.today)+"T000000Z",y=s.year;
+  const unsentList=s.unsent.map(r=>`・${muniLabel(r)} ${yen(r.amount)}(${r.date})`).join("\n")||"なし";
+  const ev=[[`furusato-${y}-end`,s.donate_end,`ふるさと納税 ${y}年分の寄附締切`,`${y}年の控除になるのは12/31までに決済した寄附です。\n今年の寄附 ${s.count}件 ${yen(s.total)}`]];
+  if(s.mode==="ワンストップ"){
+    ev.push([`furusato-${y}-post`,s.post_by,"ふるさと納税 ワンストップ申請書の投函目安",`${md(s.deadline)}必着。未送付:\n${unsentList}`]);
+    ev.push([`furusato-${y}-deadline`,s.deadline,"ふるさと納税 ワンストップ申請書 必着日",`${y}年分の申請書はこの日までに各自治体へ必着。未送付:\n${unsentList}`]);
+  }
+  const out=["BEGIN:VCALENDAR","VERSION:2.0",`PRODID:-//jisaku-koubou//furusato_memo ${APP_VERSION}//JA`,"CALSCALE:GREGORIAN"];
+  for(const [uid,d,title,desc] of ev){const nd=addDays(d,1);
+    out.push("BEGIN:VEVENT",`UID:${uid}@jisaku-koubou`,`DTSTAMP:${stamp}`,`DTSTART;VALUE=DATE:${d8(d)}`,`DTEND;VALUE=DATE:${d8(nd)}`,`SUMMARY:${icsEscape(title)}`,`DESCRIPTION:${icsEscape(desc)}`,"BEGIN:VALARM","ACTION:DISPLAY",`DESCRIPTION:${icsEscape(title)}`,"TRIGGER:-PT15H","END:VALARM","END:VEVENT");}
+  out.push("END:VCALENDAR");
+  return out.join("\r\n")+"\r\n";
+}
+function reportText(s){
+  const L=[`${APP_TITLE} レポート`,`基準日: ${ymd(s.today)} / 対象: ${s.year}年分`,"","■ いちばん急ぐこと",s.top,""];
+  for(const [t,b,sm] of cardTexts(s))L.push(`■ ${t}: ${b}(${sm})`);
+  L.push("","■ チェック");for(const [,m] of s.messages)L.push("・"+m);
+  L.push("","■ 期限",`・${s.year}年分の寄附締切: ${ymd(s.donate_end)}(あと${s.days_end}日)`,`・申請書の投函目安: ${ymd(s.post_by)}(あと${s.days_post}日)`,`・申請書の必着日: ${ymd(s.deadline)}(あと${s.days_deadline}日)`,"","■ 寄附先");
+  for(const [k,label] of s.munis){const rs=s.records.filter(r=>muniKey(r)===k);L.push(`・${label}: ${rs.length}件 ${yen(rs.reduce((a,r)=>a+parseInt(r.amount,10),0))}`);}
+  L.push("","■ 月別");s.monthly.forEach((v,i)=>{if(v)L.push(`・${i+1}月: ${yen(v)}(累計 ${yen(s.cumulative[i])})`);});
+  L.push("","■ 寄附一覧");
+  for(const r of s.records)L.push(`・${r.date} ${muniLabel(r)} ${r.item} ${yen(r.amount)} 申請:${r.app} 証明書:${r.cert} 返礼品:${r.arrived} → ${rowStatus(r,s)}`);
+  L.push("","※ 上限は自分で調べた目安です。控除額の計算・税務の助言ではありません。","※ ワンストップ特例は「確定申告が不要な給与所得者等」で「寄附先が5団体以内」のときに使えます。");
+  return L.join("\n")+"\n";
+}
+function escRe(s){return s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");}
+function parseMail(text,defaultYear){
+  const t=nfkc(text),lines=t.split(/\r?\n/).map(l=>l.trim()).filter(l=>l);
+  const labelValue=labels=>{for(const l of lines)for(const lb of labels){const m=l.match(new RegExp("^[\\[【■・]*\\s*"+escRe(lb)+"[\\]】]?\\s*[:：]?\\s*(.+)$"));if(m&&m[1].trim())return m[1].trim();}return "";};
+  let d=null,v=labelValue(["寄附日","寄付日","申込日時","申込日","決済日","注文日","受付日"]);
+  if(v)d=parseDate(v,defaultYear);if(d===null)d=parseDate(t,defaultYear);
+  let amount=null;v=labelValue(["寄附金額","寄付金額","寄附額","寄付額","お支払い金額","金額","合計"]);
+  if(v)amount=parseAmount(v);
+  if(amount===null){const m=t.match(/([\d,]+)\s*円/)||t.match(/[¥\\]\s*([\d,]+)/);if(m)amount=parseAmount(m[1]);}
+  let pref="",city="";v=labelValue(["寄附先自治体","寄付先自治体","寄附先","寄付先","自治体名","自治体"]);
+  const src=v||t;
+  for(const p of PREFS){const i=src.indexOf(p);if(i>=0){const m=src.slice(i+p.length).match(/^\s*([^\s、。,()()「」]{1,8}?[市町村区])/);if(m){pref=p;city=m[1];break;}}}
+  if(!city&&v){const m=v.match(/([^\s、。,]{1,8}?[市町村区])/);city=m?m[1]:v;}
+  const item=labelValue(["返礼品名","返礼品","お礼の品","お礼品","品名","商品名"]);
+  return {date:d?ymd(d):"",pref,city,item,amount:amount!==null?amount:0};
+}
+
+// ---------- 保存(localStorage、使えなくても動く)
+let lsOK=true;
+function lsLoad(){try{const t=localStorage.getItem(LS_KEY);if(!t)return null;return importJson(t);}catch(e){return null;}}
+function lsSave(){try{localStorage.setItem(LS_KEY,exportJson(state.records,state.settings));return true;}catch(e){lsOK=false;return false;}}
+function lsClear(){try{localStorage.removeItem(LS_KEY);}catch(e){}}
+try{localStorage.getItem("__t");}catch(e){lsOK=false;}
+
+// ---------- 画面
+const $=id=>document.getElementById(id);
+const COLORS={red:"#c62828",orange:"#e65100",blue:"#1565c0",green:"#2e7d32",gray:"#555555"};
+const state={records:[],settings:{},sample:true,selected:null,s:null};
+function setStatus(t){$("status").textContent=t;}
+function today(){return baseToday(state.settings);}
+function esc(t){return String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function refresh(){
+  const s=summarize(state.records,state.settings,today());state.s=s;
+  const b=$("banner");b.textContent=s.top;b.style.background=COLORS[s.messages.length?s.messages[0][0]:"green"]||COLORS.gray;
+  $("sampleTag").style.display=state.sample?"":"none";
+  const ct=cardTexts(s);
+  $("cards").innerHTML=ct.map((c,i)=>{let col="";if(i===2&&(s.unsent.length||s.mode!=="ワンストップ"))col=COLORS.red;if(i===3&&s.n_munis>=ONESTOP_MAX)col=COLORS.orange;
+    return `<div class="card"><div class="t1">${esc(c[0])}</div><div class="t2"${col?` style="color:${col}"`:""}>${esc(c[1])}</div><div class="t3">${esc(c[2])}</div></div>`;}).join("");
+  $("checks").innerHTML=s.messages.map(([c,m])=>`<div style="color:${COLORS[c]||"#333"}">● ${esc(m)}</div>`).join("");
+  $("deadlines").textContent=`寄附締切 ${ymd(s.donate_end)}(あと${s.days_end}日) / 投函目安 ${md(s.post_by)} / 必着 ${ymd(s.deadline)}`;
+  $("tblTitle").textContent=`${s.year}年の寄附 ${s.count}件`+(s.others?`(ほかの年 ${s.others}件は表示していません)`:"");
+  const H=["日付","自治体","返礼品","金額","申請書","受領証明書","返礼品","期限・状態"];
+  $("tbody").innerHTML=s.records.map(r=>{const cls=(r.app==="未送付"&&s.mode==="ワンストップ")?"unsent":(r.app==="受理済み"?"done":"");
+    const v=[r.date,muniLabel(r),r.item,yen(r.amount),r.app,r.cert,r.arrived,rowStatus(r,s)];
+    return `<tr data-id="${esc(r.id)}" class="${cls}${state.selected===r.id?" sel":""}">`+v.map((x,i)=>`<td data-h="${H[i]}"${i===3?' class="num"':""}>${esc(x)}</td>`).join("")+"</tr>";}).join("");
+  drawChart();
+}
+function drawChart(){
+  const s=state.s,cv=$("chart");if(!s)return;
+  const W=cv.clientWidth||600,Hh=cv.clientHeight||220,dpr=window.devicePixelRatio||1;
+  cv.width=Math.round(W*dpr);cv.height=Math.round(Hh*dpr);
+  const g=cv.getContext("2d");g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,Hh);
+  const narrow=W<480,Lm=narrow?40:60,Rm=narrow?92:120,T=28,B=26,font=n=>`${n}px "Meiryo UI","Noto Sans CJK JP",sans-serif`;
+  g.fillStyle="#222";g.font="bold "+font(13);g.textBaseline="middle";g.textAlign="left";g.fillText(`${s.year}年 月別の寄附(棒)と累計(線)`,4,12);
+  let mx=Math.max(s.cumulative[11],s.limit,1);mx=Math.floor((mx*1.1+9999)/10000)*10000;
+  const pw=W-Lm-Rm,ph=Hh-T-B,yof=v=>T+ph-ph*v/mx;
+  g.font=font(11);
+  for(let k=0;k<5;k++){const v=Math.floor(mx*k/4),y=yof(v);g.strokeStyle="#eee";g.lineWidth=1;g.beginPath();g.moveTo(Lm,y);g.lineTo(Lm+pw,y);g.stroke();g.fillStyle="#777";g.textAlign="right";g.fillText(v?`${Math.floor(v/10000)}万`:"0",Lm-6,y);}
+  const bw=pw/12;g.textAlign="center";
+  for(let i=0;i<12;i++){const x0=Lm+i*bw,v=s.monthly[i];if(v){g.fillStyle="#8d6e63";g.fillRect(x0+bw*.22,yof(v),bw*.56,yof(0)-yof(v));}
+    g.fillStyle="#555";g.fillText(narrow?`${i+1}`:`${i+1}月`,x0+bw/2,T+ph+12);}
+  g.strokeStyle="#1565c0";g.lineWidth=2;g.beginPath();s.cumulative.forEach((v,i)=>{const x=Lm+i*bw+bw/2;i?g.lineTo(x,yof(v)):g.moveTo(x,yof(v));});g.stroke();
+  const last=s.cumulative[11];g.textAlign="left";g.font="bold "+font(12);g.fillStyle="#1565c0";g.fillText(`累計 ${yen(last)}`,Lm+pw+6,yof(last));
+  if(s.limit>0){const y=yof(s.limit);g.strokeStyle="#e65100";g.setLineDash([5,3]);g.beginPath();g.moveTo(Lm,y);g.lineTo(Lm+pw,y);g.stroke();g.setLineDash([]);
+    g.fillStyle="#e65100";g.fillText(`目安 ${yen(s.limit)}`,Lm+pw+6,Math.abs(y-yof(last))<18?y-12:y);}
+}
+function changed(msg){state.sample=false;const ok=lsSave();setStatus(msg+(ok?"(このブラウザに保存しました)":"(このブラウザでは保存できません。書出でJSONを保存してください)"));refresh();}
+function selRec(){const r=state.records.find(x=>x.id===state.selected);if(!r){alert("表の寄附を1つ選んでください");return null;}return r;}
+function openModal(id){$(id).classList.add("open");}
+function closeModal(id){$(id).classList.remove("open");}
+let editing=null;
+function recordDialog(rec,preset){
+  editing=rec;$("recTitle").textContent=rec?"寄附を編集":"寄附を追加";
+  const b=rec?rec:(preset||{date:ymd(today()),pref:"",city:"",item:"",amount:"",app:"未送付",cert:"なし",arrived:"未着",memo:""});
+  $("fDate").value=b.date;$("fPref").value=b.pref;$("fCity").value=b.city;$("fItem").value=b.item;$("fAmount").value=b.amount===""?"":String(b.amount);
+  $("fApp").value=b.app;$("fCert").value=b.cert;$("fArr").value=b.arrived;$("fMemo").value=b.memo||"";$("recErr").textContent="";openModal("mRec");
+}
+function recOk(){
+  const d=parseDate($("fDate").value,today().y),a=parseAmount($("fAmount").value),city=nfkc($("fCity").value);
+  if(d===null){$("recErr").textContent="日付が読めません(例 2026-11-19)";return;}
+  if(a===null||a<=0){$("recErr").textContent="金額を数字で入れてください";return;}
+  if(!city){$("recErr").textContent="自治体を入れてください";return;}
+  const nr={id:editing?editing.id:nextId(state.records),date:ymd(d),pref:nfkc($("fPref").value),city,item:nfkc($("fItem").value),amount:a,app:$("fApp").value||"未送付",cert:$("fCert").value||"なし",arrived:$("fArr").value||"未着",memo:$("fMemo").value.trim()};
+  if(editing){Object.assign(editing,nr);closeModal("mRec");changed("寄附を更新しました");}
+  else{state.records.push(nr);state.selected=nr.id;closeModal("mRec");changed("寄附を追加しました");}
+}
+function download(name,text,type){
+  const blob=new Blob([text],{type});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);setStatus("書き出しました: "+name);
+}
+function exportText(kind){const s=summarize(state.records,state.settings,today());
+  if(kind==="csv")return exportCsv(state.records);if(kind==="json")return exportJson(state.records,state.settings);if(kind==="ics")return exportIcs(s);return reportText(s);}
+function doExport(kind){const y=summarize(state.records,state.settings,today()).year;
+  const names={csv:`furusato_memo_${y}.csv`,json:"furusato_memo.json",ics:`furusato_deadline_${y}.ics`,txt:`furusato_report_${y}.txt`};
+  const types={csv:"text/csv;charset=utf-8",json:"application/json",ics:"text/calendar;charset=utf-8",txt:"text/plain;charset=utf-8"};
+  download(names[kind],exportText(kind),types[kind]);}
+function importFile(name,buf){
+  const [text,enc]=decodeBytes(buf);
+  if(/\.json$/i.test(name)){try{const [r,st]=importJson(text);state.records=r;state.settings=st;state.selected=null;changed(`JSONを読み込みました(${r.length}件)`);}catch(e){alert("読み込めませんでした: "+e.message);}return;}
+  const base=state.sample?[]:state.records;
+  const [added,warns]=importCsv(text,base,today().y);
+  if(!added.length&&warns.length&&warns[0].includes("見出し")){alert(warns[0]);return;}
+  state.records=base.concat(added);state.selected=null;
+  changed(`CSVを読み込みました: ${added.length}件追加(${enc})`+(warns.length?` / 注意 ${warns.length}件`:""));
+  if(warns.length)alert(warns.slice(0,15).join("\n"));
+}
+function init(){
+  for(const [id,vals] of [["fApp",APP_STATUSES],["fCert",CERT_VALUES],["fArr",ARRIVE_VALUES]])$(id).innerHTML=vals.map(v=>`<option>${v}</option>`).join("");
+  $("prefList").innerHTML=PREFS.map(p=>`<option value="${p}">`).join("");
+  const saved=lsLoad();
+  if(saved){state.records=saved[0];state.settings=saved[1];state.sample=false;setStatus("保存データを読み込みました");}
+  else{state.records=SAMPLE_RECORDS.map(r=>({...r}));state.settings={...SAMPLE_SETTINGS};state.sample=true;
+    setStatus(lsOK?"サンプルデータを表示中(架空)。編集すると保存が始まります":"サンプルデータを表示中(架空)。このブラウザでは保存できないため、書出でJSONを保存してください");}
+  $("tbody").addEventListener("click",e=>{const tr=e.target.closest("tr");if(tr){state.selected=tr.dataset.id;document.querySelectorAll("#tbody tr").forEach(x=>x.classList.toggle("sel",x===tr));}});
+  $("tbody").addEventListener("dblclick",e=>{const tr=e.target.closest("tr");if(tr){state.selected=tr.dataset.id;const r=selRec();if(r)recordDialog(r);}});
+  $("bAdd").onclick=()=>recordDialog(null);
+  $("recOk").onclick=recOk;$("recCancel").onclick=()=>closeModal("mRec");
+  $("bMail").onclick=()=>{$("mailText").value=SAMPLE_MAIL;openModal("mMail");};
+  $("mailCancel").onclick=()=>closeModal("mMail");
+  $("mailGo").onclick=()=>{const p=parseMail($("mailText").value,today().y);Object.assign(p,{app:"未送付",cert:"なし",arrived:"未着",memo:"メールから追加"});if(!p.amount)p.amount="";closeModal("mMail");recordDialog(null,p);};
+  $("bEdit").onclick=()=>{const r=selRec();if(r)recordDialog(r);};
+  $("bDel").onclick=()=>{const r=selRec();if(r&&confirm(`${r.date} ${muniLabel(r)} ${yen(r.amount)} を削除しますか?`)){state.records=state.records.filter(x=>x.id!==r.id);state.selected=null;changed("1件削除しました");}};
+  $("bSent").onclick=()=>{const r=selRec();if(r){r.app=r.app==="送付済み"?"受理済み":"送付済み";changed(`${muniLabel(r)}: 申請書を「${r.app}」にしました`);}};
+  $("bCert").onclick=()=>{const r=selRec();if(r){r.cert="あり";changed(`${muniLabel(r)}: 受領証明書「あり」`);}};
+  $("bArr").onclick=()=>{const r=selRec();if(r){r.arrived="到着済み";changed(`${muniLabel(r)}: 返礼品「到着済み」`);}};
+  $("bLoad").onclick=()=>$("file").click();
+  $("file").onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{importFile(f.name,rd.result);$("file").value="";};rd.readAsArrayBuffer(f);};
+  $("selExport").onchange=e=>{const k=e.target.value;if(k)doExport(k);e.target.value="";};
+  $("bSettings").onclick=()=>{const st=state.settings;$("sYear").value=st.year;$("sBase").value=st.base_date;$("sLimit").value=st.limit;$("sMargin").value=st.margin;$("setErr").textContent="";openModal("mSet");};
+  $("setCancel").onclick=()=>closeModal("mSet");
+  $("setOk").onclick=()=>{
+    const ys=nfkc($("sYear").value||"0"),ms=nfkc($("sMargin").value||"0");
+    if(!/^-?\d+$/.test(ys)||!/^-?\d+$/.test(ms)){$("setErr").textContent="数字で入れてください";return;}
+    const y=parseInt(ys,10),lim=parseAmount($("sLimit").value||"0"),mg=parseInt(ms,10),bd=nfkc($("sBase").value);
+    if(bd&&parseDate(bd)===null){$("setErr").textContent="基準日が読めません(例 2026-11-19)";return;}
+    if((y&&!(y>=2000&&y<=2100))||lim===null||lim<0||!(mg>=0&&mg<=60)){$("setErr").textContent="対象年は2000〜2100、上限は0以上、日数は0〜60で入れてください";return;}
+    Object.assign(state.settings,{year:y,base_date:bd?ymd(parseDate(bd)):"",limit:lim,margin:mg});closeModal("mSet");changed("設定を変更しました");};
+  $("bReset").onclick=()=>{if(!confirm("サンプルデータに戻しますか?(今のデータはこのブラウザの保存から消えます)"))return;
+    state.records=SAMPLE_RECORDS.map(r=>({...r}));state.settings={...SAMPLE_SETTINGS};state.sample=true;state.selected=null;lsClear();setStatus("サンプルデータに戻しました");refresh();};
+  window.addEventListener("resize",drawChart);
+  refresh();
+}
+window.FM={summarize,reportText,exportCsv,exportJson,exportIcs,importCsv,importJson,parseMail,parseDate,parseAmount,cardTexts,rowStatus,mkDate,SAMPLE_RECORDS,SAMPLE_SETTINGS,SAMPLE_MAIL,state,refresh};
+document.addEventListener("DOMContentLoaded",init);
+</script>
+</body>
+</html>
